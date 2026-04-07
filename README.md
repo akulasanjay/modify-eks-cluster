@@ -1,11 +1,13 @@
 # modify-eks-cluster
 
-Terraform project that provisions a production-ready Amazon EKS cluster on AWS, including networking, IAM, security groups, and a full observability stack. Infrastructure is organized into reusable child modules.
+Terraform project that provisions a production-ready Amazon EKS cluster on AWS, including networking, IAM, security groups, WAF, CloudWatch logging, and a full observability stack. Infrastructure is organized into reusable child modules.
 
 ## Architecture
 
 ```
 Internet
+   │
+AWS WAFv2 (CommonRules · KnownBadInputs · Rate Limit)
    │
 Internet Gateway
    │
@@ -14,7 +16,7 @@ Internet Gateway
 │                                              │
 │  Public Subnets (AZ1–AZ3)                   │
 │    NAT Gateway + Elastic IP                  │
-│    AWS Load Balancer (Grafana)               │
+│    AWS Load Balancer (Grafana) ◄── WAF       │
 │                                              │
 │  Private Subnets (AZ1–AZ3)                  │
 │    EKS Worker Nodes (t3.medium)              │
@@ -23,8 +25,12 @@ Internet Gateway
 │      Prometheus · Alertmanager · Grafana     │
 │      Loki · Promtail                         │
 │                                              │
-│  EKS Control Plane (AWS Managed)             │
+│  EKS Control Plane → CloudWatch Logs         │
 └──────────────────────────────────────────────┘
+
+CloudWatch Log Groups (30-day retention)
+  /aws/eks/my-eks-cluster/cluster
+  /aws/eks/my-eks-cluster/application
 
 S3 Bucket — Terraform Remote State
 ```
@@ -48,18 +54,20 @@ S3 Bucket — Terraform Remote State
 │   ├── networking/            # VPC, subnets, IGW, NAT Gateway, route tables
 │   ├── security_groups/       # Cluster SG, nodes SG, SG rules
 │   ├── iam/                   # EKS cluster role + node group role + policy attachments
-│   └── eks/                   # EKS cluster, node group, pre-destroy cleanup
+│   ├── eks/                   # EKS cluster, node group, pre-destroy cleanup
+│   ├── waf/                   # WAFv2 Web ACL with managed rules + rate limiting
+│   └── cloudwatch/            # CloudWatch log groups for EKS and application logs
 │
 ├── monitoring/                # Step 3: Helm-based observability stack (independent root module)
 │
-├── main.tf                    # Calls all four modules
+├── main.tf                    # Calls all six modules
 ├── provider.tf                # AWS provider + optional S3 backend
 ├── variables.tf               # Input variable declarations
 ├── terraform.tfvars           # Variable values
-└── output.tf                  # Cluster name, endpoint, VPC ID
+└── output.tf                  # Cluster name, endpoint, VPC ID, WAF ARN, log group names
 ```
 
-> `s3-backend/` is an unused directory and can be ignored.
+> `s3-backend/` has been removed (was an unused duplicate).
 
 ## Quick Start
 
@@ -81,7 +89,7 @@ terraform init
 terraform apply
 ```
 
-Takes ~15 minutes. Creates VPC, subnets, NAT Gateway, security groups, IAM roles, and the EKS cluster + node group.
+Takes ~15 minutes. Creates VPC, subnets, NAT Gateway, security groups, IAM roles, EKS cluster + node group, WAF Web ACL, and CloudWatch log groups.
 
 ### 3 — Configure kubectl
 
@@ -129,7 +137,9 @@ Login: `admin` / value of `var.grafana_admin_password`
 | `modules/networking` | VPC, public/private subnets across 3 AZs, IGW, NAT Gateway, route tables |
 | `modules/security_groups` | Control plane SG, worker nodes SG, and all ingress rules |
 | `modules/iam` | EKS cluster IAM role + node group IAM role with required policy attachments |
-| `modules/eks` | EKS cluster, managed node group, pre-destroy LoadBalancer cleanup |
+| `modules/eks` | EKS cluster, managed node group, control plane logging, pre-destroy cleanup |
+| `modules/waf` | WAFv2 Web ACL — CommonRuleSet, KnownBadInputs, IP rate limiting (2000 req/5min) |
+| `modules/cloudwatch` | Log groups for EKS control plane and application logs (30-day retention) |
 
 ## Teardown
 
@@ -137,7 +147,7 @@ Login: `admin` / value of `var.grafana_admin_password`
 # 1. Remove monitoring stack first
 cd monitoring && terraform destroy
 
-# 2. Destroy EKS cluster and VPC
+# 2. Destroy EKS cluster, WAF, CloudWatch, VPC
 cd .. && terraform destroy
 ```
 
@@ -152,3 +162,4 @@ cd .. && terraform destroy
 | 3 | IRSA for LB Controller | Configure IAM policy + OIDC provider + service account role |
 | 4 | S3 backend | Uncomment and fill in bucket name in `provider.tf` after step 1 |
 | 5 | EBS CSI Driver | Enable the EBS CSI add-on on the cluster before applying monitoring |
+| 6 | WAF ALB association | Pass Grafana ALB ARN to `module.waf.alb_arn` after first apply |
