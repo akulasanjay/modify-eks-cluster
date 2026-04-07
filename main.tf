@@ -19,6 +19,12 @@ module "iam" {
   cluster_name = var.cluster_name
 }
 
+module "waf" {
+  source = "./modules/waf"
+  name   = var.cluster_name
+  tags   = var.tags
+}
+
 module "eks" {
   source             = "./modules/eks"
   cluster_name       = var.cluster_name
