@@ -1,0 +1,55 @@
+# Terraform directories
+**/.terraform/*
+.terraform/providers/*
+
+# State files
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Variable files (may contain secrets)
+*.tfvars
+*.tfvars.json
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform CLI config
+.terraformrc
+terraform.rc
+
+# lock file
+.terraform.loch.hcl
+
+# ---------------------------------------------
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+terraform.tfstate.backup
+.crash.log
+crash.log
+crash.*.log
+.override.tf
+.override.tf.json
+*_override.tf
+*_override.tf.json
+backend/.terraform/providers/*
+backend/terraform.tfstate.backup
+
+#-------------------------------------------------
+# Terraform - CRITICAL
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+.terraform/providers/
+backend/.terraform/
+crash.log
