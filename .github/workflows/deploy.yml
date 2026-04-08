@@ -10,30 +10,75 @@ on:
       action:
         description: 'Terraform action'
         required: true
-        default: 'plan'
+        default: 'apply'
         type: choice
-        options: [plan, apply, destroy]
+        options: [apply, destroy]
 
 env:
   TF_VERSION: '1.5.0'
   AWS_REGION: 'us-east-1'
 
 permissions:
-  id-token: write   # for OIDC
+  id-token: write
   contents: read
   pull-requests: write
 
 jobs:
-  # ── Step 1: Bootstrap S3 backend (only on manual apply) ───────────────────
+  # ── Plan only — runs on every push and PR (never applies) ─────────────────
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Inject S3 backend
+        run: |
+          BUCKET="${{ secrets.TF_STATE_BUCKET }}"
+          sed -i "s|# backend \"s3\"|backend \"s3\"|" provider.tf
+          sed -i "s|#   bucket.*|  bucket = \"$BUCKET\"|" provider.tf
+          sed -i "s|#   key|  key|; s|#   region|  region|; s|#   use_lockfile|  use_lockfile|; s|#   encrypt|  encrypt|" provider.tf
+
+      - run: terraform init
+      - run: terraform validate
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -input=false
+        env:
+          TF_VAR_cluster_name: ${{ vars.CLUSTER_NAME || 'my-eks-cluster' }}
+
+      - name: Post plan to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan 📋\n\`\`\`\n${{ steps.plan.outputs.stdout }}\n\`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+  # ── Bootstrap — manual only ────────────────────────────────────────────────
   bootstrap:
     name: Bootstrap S3 Backend
     runs-on: ubuntu-latest
-    if: github.event.inputs.action == 'apply' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
     defaults:
       run:
         working-directory: backend
     outputs:
-      bucket_name: ${{ steps.apply.outputs.bucket_name }}
+      bucket_name: ${{ steps.bucket.outputs.bucket_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,19 +94,18 @@ jobs:
 
       - run: terraform init
       - run: terraform apply -auto-approve
-        id: apply
 
       - name: Export bucket name
         id: bucket
         run: echo "bucket_name=$(terraform output -raw bucket_name)" >> $GITHUB_OUTPUT
 
-  # ── Step 2: Plan / Apply / Destroy EKS cluster ────────────────────────────
+  # ── Apply / Destroy — manual only ─────────────────────────────────────────
   terraform:
-    name: Terraform ${{ github.event.inputs.action || 'plan' }}
+    name: Terraform ${{ github.event.inputs.action }}
     runs-on: ubuntu-latest
     needs: [bootstrap]
-    if: always() && !failure()
-    environment: ${{ (github.event.inputs.action == 'apply' || github.event.inputs.action == 'destroy') && 'production' || '' }}
+    if: github.event_name == 'workflow_dispatch'
+    environment: production
     steps:
       - uses: actions/checkout@v4
 
@@ -74,44 +118,19 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Inject S3 backend bucket name
+      - name: Inject S3 backend
         run: |
           BUCKET="${{ needs.bootstrap.outputs.bucket_name || secrets.TF_STATE_BUCKET }}"
           sed -i "s|# backend \"s3\"|backend \"s3\"|" provider.tf
           sed -i "s|#   bucket.*|  bucket = \"$BUCKET\"|" provider.tf
           sed -i "s|#   key|  key|; s|#   region|  region|; s|#   use_lockfile|  use_lockfile|; s|#   encrypt|  encrypt|" provider.tf
 
-      - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Terraform Plan
-        id: plan
-        run: terraform plan -out=tfplan -input=false
-        env:
-          TF_VAR_cluster_name: ${{ vars.CLUSTER_NAME || 'my-eks-cluster' }}
-
-      - name: Post plan to PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const output = `#### Terraform Plan 📋
-            \`\`\`
-            ${{ steps.plan.outputs.stdout }}
-            \`\`\``;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
+      - run: terraform init
+      - run: terraform validate
 
       - name: Terraform Apply
-        if: github.event.inputs.action == 'apply' || github.event_name == 'push'
-        run: terraform apply -auto-approve tfplan
+        if: github.event.inputs.action == 'apply'
+        run: terraform apply -auto-approve -input=false
         env:
           TF_VAR_cluster_name: ${{ vars.CLUSTER_NAME || 'my-eks-cluster' }}
 
@@ -122,17 +141,18 @@ jobs:
           TF_VAR_cluster_name: ${{ vars.CLUSTER_NAME || 'my-eks-cluster' }}
 
       - name: Configure kubectl
-        if: github.event.inputs.action == 'apply' || github.event_name == 'push'
+        if: github.event.inputs.action == 'apply'
         run: |
           aws eks update-kubeconfig --name ${{ vars.CLUSTER_NAME || 'my-eks-cluster' }} --region ${{ env.AWS_REGION }}
           kubectl get nodes -o wide
 
-  # ── Step 3: Deploy monitoring stack ───────────────────────────────────────
+  # ── Monitoring — manual apply only ────────────────────────────────────────
   monitoring:
     name: Deploy Monitoring Stack
     runs-on: ubuntu-latest
     needs: [terraform]
-    if: github.event.inputs.action == 'apply' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+    environment: production
     defaults:
       run:
         working-directory: monitoring
@@ -150,9 +170,7 @@ jobs:
 
       - uses: azure/setup-helm@v4
 
-      - name: Configure kubectl
-        run: aws eks update-kubeconfig --name ${{ vars.CLUSTER_NAME || 'my-eks-cluster' }} --region ${{ env.AWS_REGION }}
-
+      - run: aws eks update-kubeconfig --name ${{ vars.CLUSTER_NAME || 'my-eks-cluster' }} --region ${{ env.AWS_REGION }}
       - run: terraform init
       - run: terraform apply -auto-approve -input=false
         env:
@@ -162,6 +180,5 @@ jobs:
 
       - name: Get Grafana URL
         run: |
-          echo "Grafana URL:"
           kubectl get svc -n monitoring kube-prometheus-stack-grafana \
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
