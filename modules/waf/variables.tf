@@ -15,6 +15,11 @@ variable "rate_limit" {
   default     = 2000
 }
 
+variable "waf_log_group_arn" {
+  description = "CloudWatch log group ARN for WAF full logs (must be prefixed aws-waf-logs-)"
+  type        = string
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

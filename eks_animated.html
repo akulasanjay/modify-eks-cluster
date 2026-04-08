@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EKS Architecture — Animated</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0d1117; overflow:hidden; font-family:'Segoe UI',sans-serif; }
+canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width  = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const W = canvas.width, H = canvas.height;
+
+// ── colour palette ──────────────────────────────────────────────────────────
+const COL = {
+  bg:      '#0d1117',
+  border:  '#30363d',
+  text:    '#e6edf3',
+  muted:   '#8b949e',
+  blue:    '#58a6ff',
+  green:   '#3fb950',
+  orange:  '#d29922',
+  purple:  '#bc8cff',
+  red:     '#f85149',
+  waf:     '#e040fb',
+  cw:      '#00bcd4',
+  prom:    '#e6522c',
+  loki:    '#F0A830',
+  grafana: '#F46800',
+};
+
+// ── node definitions (x,y = centre) ─────────────────────────────────────────
+const N = {
+  internet: { x:W*.50, y:H*.04,  w:160, h:40,  label:'🌐 Internet',              color:COL.border,  tc:COL.text   },
+  waf:      { x:W*.50, y:H*.12,  w:260, h:44,  label:'🛡 AWS WAFv2',              color:COL.waf,     tc:COL.waf    },
+  igw:      { x:W*.50, y:H*.21,  w:200, h:40,  label:'🔀 Internet Gateway',       color:COL.orange,  tc:COL.orange },
+  nat:      { x:W*.28, y:H*.31,  w:160, h:40,  label:'🔁 NAT Gateway',            color:COL.green,   tc:COL.green  },
+  alb:      { x:W*.72, y:H*.31,  w:180, h:40,  label:'⚖️ Load Balancer',          color:COL.green,   tc:COL.green  },
+  // Worker nodes — prominent row
+  node1:    { x:W*.22, y:H*.44,  w:155, h:52,  label:'🖥 Worker Node AZ1\nt3.medium · private', color:COL.blue, tc:COL.blue },
+  node2:    { x:W*.50, y:H*.44,  w:155, h:52,  label:'🖥 Worker Node AZ2\nt3.medium · private', color:COL.blue, tc:COL.blue },
+  node3:    { x:W*.78, y:H*.44,  w:155, h:52,  label:'🖥 Worker Node AZ3\nt3.medium · private', color:COL.blue, tc:COL.blue },
+  prom:     { x:W*.18, y:H*.60,  w:130, h:38,  label:'📈 Prometheus',             color:COL.prom,    tc:COL.prom   },
+  alert:    { x:W*.34, y:H*.60,  w:130, h:38,  label:'🔔 Alertmanager',           color:COL.prom,    tc:COL.prom   },
+  grafana:  { x:W*.50, y:H*.60,  w:130, h:38,  label:'📊 Grafana',                color:COL.grafana, tc:COL.grafana},
+  loki:     { x:W*.66, y:H*.60,  w:130, h:38,  label:'🪵 Loki',                  color:COL.loki,    tc:COL.loki   },
+  promtail: { x:W*.82, y:H*.60,  w:130, h:38,  label:'🚀 Promtail',               color:COL.cw,      tc:COL.cw     },
+  eks:      { x:W*.50, y:H*.74,  w:220, h:44,  label:'⚙️ EKS Control Plane\nk8s 1.31 · AWS Managed', color:COL.orange, tc:COL.orange },
+  s3:       { x:W*.18, y:H*.88,  w:160, h:40,  label:'🪣 S3 State',               color:COL.orange,  tc:COL.orange },
+  cw_eks:   { x:W*.42, y:H*.88,  w:148, h:38,  label:'📋 CW: EKS Logs',           color:COL.cw,      tc:COL.cw     },
+  cw_waf:   { x:W*.60, y:H*.88,  w:148, h:38,  label:'📋 CW: WAF Logs',           color:COL.waf,     tc:COL.waf    },
+  cw_vpc:   { x:W*.78, y:H*.88,  w:148, h:38,  label:'📋 CW: VPC Flow',           color:COL.blue,    tc:COL.blue   },
+};
+
+// ── edges: [from, to, color, label, dashed] ──────────────────────────────────
+const EDGES = [
+  ['internet','waf',      COL.waf,     'traffic',       false],
+  ['waf',     'igw',      COL.waf,     '',              false],
+  ['igw',     'nat',      COL.green,   '',              false],
+  ['igw',     'alb',      COL.green,   'WAF attached',  true ],
+  ['nat',     'node1',    COL.blue,    '',              false],
+  ['nat',     'node2',    COL.blue,    '',              false],
+  ['nat',     'node3',    COL.blue,    '',              false],
+  ['alb',     'grafana',  COL.grafana, '',              false],
+  ['node1',   'prom',     COL.prom,    'metrics',       true ],
+  ['node2',   'prom',     COL.prom,    '',              true ],
+  ['node3',   'prom',     COL.prom,    '',              true ],
+  ['promtail','loki',     COL.loki,    'logs',          false],
+  ['loki',    'grafana',  COL.loki,    '',              false],
+  ['prom',    'grafana',  COL.prom,    'metrics',       false],
+  ['prom',    'alert',    COL.prom,    'alerts',        true ],
+  ['eks',     'cw_eks',   COL.cw,      'ctrl logs',     true ],
+  ['waf',     'cw_waf',   COL.waf,     'full logs',     true ],
+  ['igw',     'cw_vpc',   COL.blue,    'flow logs',     true ],
+  ['eks',     's3',       COL.orange,  'tfstate',       true ],
+  ['node1',   'eks',      COL.orange,  '',              true ],
+  ['node2',   'eks',      COL.orange,  '',              true ],
+];
+
+// ── particles ────────────────────────────────────────────────────────────────
+const particles = [];
+
+function edgeMidpoints(a, b) {
+  return { x1: N[a].x, y1: N[a].y, x2: N[b].x, y2: N[b].y };
+}
+
+function spawnParticle(edge) {
+  const { x1, y1, x2, y2 } = edgeMidpoints(edge[0], edge[1]);
+  particles.push({ x1, y1, x2, y2, t: 0, speed: 0.004 + Math.random()*0.004, color: edge[2], size: 3.5 });
+}
+
+// seed initial particles spread across edges
+EDGES.forEach((e, i) => {
+  for (let j = 0; j < 3; j++) {
+    const { x1, y1, x2, y2 } = edgeMidpoints(e[0], e[1]);
+    particles.push({ x1, y1, x2, y2, t: (j/3 + i*0.07) % 1, speed: 0.004 + Math.random()*0.004, color: e[2], size: 3.5 });
+  }
+});
+
+// spawn new particles periodically
+setInterval(() => {
+  const e = EDGES[Math.floor(Math.random() * EDGES.length)];
+  spawnParticle(e);
+}, 300);
+
+// ── draw helpers ─────────────────────────────────────────────────────────────
+function roundRect(x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.roundRect(x - w/2, y - h/2, w, h, r);
+  if (fill)   { ctx.fillStyle   = fill;   ctx.fill();   }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
+}
+
+function drawNode(n) {
+  roundRect(n.x, n.y, n.w, n.h, 8, '#161b22', n.color);
+  ctx.fillStyle = n.tc;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const lines = n.label.split('\n');
+  if (lines.length === 1) {
+    ctx.font = '12px Segoe UI';
+    ctx.fillText(n.label, n.x, n.y);
+  } else {
+    ctx.font = 'bold 12px Segoe UI';
+    ctx.fillText(lines[0], n.x, n.y - 9);
+    ctx.font = '10px monospace';
+    ctx.fillStyle = n.tc + 'aa';
+    ctx.fillText(lines[1], n.x, n.y + 9);
+  }
+}
+
+function drawEdge(e) {
+  const { x1, y1, x2, y2 } = edgeMidpoints(e[0], e[1]);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = e[2] + '44';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash(e[4] ? [5,4] : []);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // edge label
+  if (e[3]) {
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    ctx.fillStyle = e[2] + 'aa';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(e[3], mx + 6, my - 6);
+  }
+}
+
+function drawParticle(p) {
+  const x = p.x1 + (p.x2 - p.x1) * p.t;
+  const y = p.y1 + (p.y2 - p.y1) * p.t;
+  // glow
+  const g = ctx.createRadialGradient(x, y, 0, x, y, p.size * 3);
+  g.addColorStop(0, p.color + 'ff');
+  g.addColorStop(1, p.color + '00');
+  ctx.beginPath();
+  ctx.arc(x, y, p.size * 3, 0, Math.PI*2);
+  ctx.fillStyle = g;
+  ctx.fill();
+  // core dot
+  ctx.beginPath();
+  ctx.arc(x, y, p.size, 0, Math.PI*2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+}
+
+// ── cluster backgrounds ───────────────────────────────────────────────────────
+function drawClusters() {
+  // VPC
+  ctx.beginPath();
+  ctx.roundRect(W*.10, H*.27, W*.82, H*.52, 12);
+  ctx.fillStyle   = '#0d1a2e44';
+  ctx.strokeStyle = COL.blue + '55';
+  ctx.lineWidth   = 1.5;
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COL.blue + '88';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('VPC  10.1.0.0/16', W*.11, H*.285);
+
+  // EKS Managed Node Group box
+  ctx.beginPath();
+  ctx.roundRect(W*.12, H*.38, W*.78, H*.14, 10);
+  ctx.fillStyle   = '#0d1a3a55';
+  ctx.strokeStyle = COL.blue + '99';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([6,3]);
+  ctx.fill(); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = COL.blue;
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('EKS Managed Node Group  ·  desired=2  min=2  max=4  ·  private subnets AZ1–AZ3', W*.13, H*.392);
+
+  // monitoring namespace
+  ctx.beginPath();
+  ctx.roundRect(W*.10, H*.555, W*.82, H*.12, 10);
+  ctx.fillStyle   = '#1a103044';
+  ctx.strokeStyle = COL.purple + '55';
+  ctx.lineWidth   = 1.2;
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COL.purple + '99';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('namespace: monitoring', W*.11, H*.563);
+
+  // CloudWatch group
+  ctx.beginPath();
+  ctx.roundRect(W*.30, H*.83, W*.60, H*.10, 10);
+  ctx.fillStyle   = '#0d1f2444';
+  ctx.strokeStyle = COL.cw + '55';
+  ctx.lineWidth   = 1.2;
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COL.cw + '99';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('CloudWatch Logs  (30-day retention)', W*.31, H*.838);
+}
+
+// ── title ─────────────────────────────────────────────────────────────────────
+function drawTitle() {
+  ctx.fillStyle = COL.text;
+  ctx.font = 'bold 16px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('AWS EKS Cluster Architecture', W/2, 18);
+  ctx.fillStyle = COL.muted;
+  ctx.font = '11px monospace';
+  ctx.fillText('us-east-1  |  my-eks-cluster  |  k8s 1.31  |  Terraform-managed', W/2, 34);
+}
+
+// ── animation loop ────────────────────────────────────────────────────────────
+function loop() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = COL.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  drawClusters();
+  EDGES.forEach(drawEdge);
+  Object.values(N).forEach(drawNode);
+
+  // update + draw particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.t += p.speed;
+    if (p.t > 1) { particles.splice(i, 1); continue; }
+    drawParticle(p);
+  }
+
+  drawTitle();
+  requestAnimationFrame(loop);
+}
+
+loop();
+
+window.addEventListener('resize', () => {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>

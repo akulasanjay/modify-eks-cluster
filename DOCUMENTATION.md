@@ -82,37 +82,44 @@ This project provisions a fully functional Amazon EKS cluster on AWS using Terra
                     Internet
                        │
                ┌───────▼────────┐
-               │  AWS WAFv2     │
+               │  AWS WAFv2     │  ──────────────────────────► CW: aws-waf-logs-*
                │  CommonRules   │
                │  KnownBadInput │
                │  Rate Limit    │
                └───────┬────────┘
                        │
                ┌───────▼────────┐
-               │ Internet GW    │
+               │ Internet GW    │  ──────────────────────────► CW: /aws/vpc/.../flow-logs
                └───────┬────────┘
                        │
-   ┌───────────────────┼──────────────────────┐
-   │  VPC  10.1.0.0/16                        │
-   │                                          │
-   │  Public Subnets (AZ1–AZ3)               │
-   │    NAT Gateway + Elastic IP              │
-   │    AWS Load Balancer (Grafana) ◄─── WAF  │
-   │                                          │
-   │  Private Subnets (AZ1–AZ3)              │
-   │    EKS Worker Nodes (t3.medium)          │
-   │                                          │
-   │    Namespace: monitoring                 │
-   │      Prometheus · Alertmanager · Grafana │
-   │      Loki · Promtail                     │
-   │                                          │
-   │  EKS Control Plane (AWS Managed)         │
-   │    Logs → CloudWatch                     │
-   └──────────────────────────────────────────┘
+   ┌───────────────────┼──────────────────────────────────────┐
+   │  VPC  10.1.0.0/16                                        │
+   │                                                          │
+   │  Public Subnets (AZ1–AZ3)                               │
+   │    NAT Gateway + Elastic IP                              │
+   │    AWS Load Balancer (Grafana) ◄─── WAF                  │
+   │                                                          │
+   │  Private Subnets (AZ1–AZ3)                              │
+   │    ┌─────────────────────────────────────────────────┐   │
+   │    │  EKS Managed Node Group                         │   │
+   │    │  Worker Node AZ1  Worker Node AZ2  Worker Node AZ3  │
+   │    │  t3.medium        t3.medium        t3.medium    │   │
+   │    │  desired=2  min=2  max=4                        │   │
+   │    │                                                 │   │
+   │    │  Namespace: monitoring                          │   │
+   │    │    Prometheus · Alertmanager · Grafana          │   │
+   │    │    Loki · Promtail                              │   │
+   │    └─────────────────────────────────────────────────┘   │
+   │                                                          │
+   │  EKS Control Plane (AWS Managed)                         │
+   │    Logs → CloudWatch                                     │
+   └──────────────────────────────────────────────────────────┘
 
-   CloudWatch Log Groups
-     /aws/eks/my-eks-cluster/cluster      (30 days)
-     /aws/eks/my-eks-cluster/application  (30 days)
+   CloudWatch Log Groups (30-day retention)
+     /aws/eks/my-eks-cluster/cluster      ◄── EKS control plane
+     /aws/eks/my-eks-cluster/application  ◄── workload logs
+     aws-waf-logs-my-eks-cluster          ◄── WAF full request logs
+     /aws/vpc/my-eks-cluster/flow-logs    ◄── VPC network traffic
 
    S3 Bucket — Terraform Remote State (versioned, AES256)
 ```
@@ -171,6 +178,8 @@ Both groups allow all outbound traffic.
 
 ## 8. Module: `eks/`
 
+### EKS Cluster
+
 | Setting | Value |
 |---|---|
 | Kubernetes version | `1.31` (via `var.kubernetes_version`) |
@@ -178,9 +187,40 @@ Both groups allow all outbound traffic.
 | Private endpoint | Enabled |
 | Public endpoint | Enabled (restrict `public_access_cidrs` for production) |
 | Control plane logs | `api`, `audit`, `authenticator`, `controllerManager`, `scheduler` → CloudWatch |
-| Node instance type | `t3.medium` |
-| Node subnets | Private only (outbound via NAT Gateway) |
-| Scaling | desired=2, min=2, max=4, max_unavailable=1 |
+
+### Worker Nodes (Managed Node Group)
+
+Worker nodes are EC2 instances managed by EKS via `aws_eks_node_group`. They run in **private subnets only** and reach the internet through the NAT Gateway.
+
+| Setting | Value |
+|---|---|
+| Node group name | `my-eks-cluster-ng` |
+| Instance type | `t3.medium` (2 vCPU, 4 GB RAM) |
+| Subnets | Private subnets AZ1–AZ3 (`10.1.11–13.0/24`) |
+| Desired nodes | `2` |
+| Min nodes | `2` |
+| Max nodes | `4` |
+| Max unavailable (rolling update) | `1` |
+| IAM role | `nodegroup-role` (EKSWorkerNode + CNI + ECR) |
+| Outbound internet | Via NAT Gateway in public subnet AZ1 |
+
+**What runs on worker nodes:**
+- All Kubernetes workloads (pods, deployments)
+- The `monitoring` namespace: Prometheus, Alertmanager, Grafana, Loki, Promtail
+- AWS VPC CNI plugin (pod networking)
+- `kube-proxy` (service networking)
+
+**Verify nodes are ready:**
+```bash
+kubectl get nodes -o wide
+# Expected: 2 nodes in Ready state, internal IPs in 10.1.11–13.0/24
+```
+
+**Check node resource usage:**
+```bash
+kubectl top nodes
+kubectl describe node <node-name>
+```
 
 ### Pre-destroy Cleanup
 
@@ -215,14 +255,18 @@ module "waf" {
 
 ## 10. Module: `cloudwatch/`
 
-Creates CloudWatch log groups for EKS log ingestion.
+Creates CloudWatch log groups for all infrastructure log sources.
 
-| Log Group | Retention | Purpose |
-|---|---|---|
-| `/aws/eks/<cluster>/cluster` | 30 days | EKS control plane logs (api, audit, authenticator, etc.) |
-| `/aws/eks/<cluster>/application` | 30 days | Application-level logs from workloads |
+| Log Group | Retention | Source | Purpose |
+|---|---|---|---|
+| `/aws/eks/<cluster>/cluster` | 30 days | EKS control plane | api, audit, authenticator, controllerManager, scheduler |
+| `/aws/eks/<cluster>/application` | 30 days | Worker node workloads | Application-level logs |
+| `aws-waf-logs-<cluster>` | 30 days | AWS WAFv2 | Full request logs — IPs, URIs, matched rules, actions |
+| `/aws/vpc/<cluster>/flow-logs` | 30 days | VPC Flow Logs | ALL traffic (accepted + rejected) across the VPC |
 
 Retention is configurable via `var.retention_days` (default: `30`).
+
+VPC Flow Logs use a dedicated IAM role (`<cluster>-vpc-flow-logs-role`) with `logs:PutLogEvents` permissions.
 
 ---
 

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AWS EKS — Architecture Infographic</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', system-ui, sans-serif; padding: 24px 32px; min-width: 900px; }
+
+h1 { text-align: center; font-size: 1.7rem; margin-bottom: 4px; }
+.sub { text-align: center; color: #8b949e; font-size: 0.8rem; font-family: monospace; margin-bottom: 28px; }
+
+/* ── layout ── */
+.layout { display: flex; gap: 0; align-items: flex-start; }
+.main   { flex: 1; display: flex; flex-direction: column; gap: 0; }
+.side   { width: 210px; display: flex; flex-direction: column; gap: 0; padding-left: 0; }
+
+/* ── cards ── */
+.card {
+  border-radius: 10px; padding: 12px 16px;
+  border: 1.5px solid; margin: 6px;
+}
+.card h2 { font-size: 0.88rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
+.card p  { font-size: 0.75rem; color: #8b949e; line-height: 1.55; }
+.tag {
+  display: inline-block; font-size: 0.68rem; padding: 2px 7px;
+  border-radius: 20px; margin: 2px 2px 0 0; font-family: monospace;
+}
+
+/* colour themes */
+.c-internet { border-color:#30363d; background:#161b22; }
+.c-internet h2 { color:#e6edf3; }
+
+.c-waf { border-color:#e040fb; background:#1c1028; }
+.c-waf h2 { color:#e040fb; }
+.c-waf .tag { background:#2d1040; color:#e040fb; border:1px solid #e040fb; }
+
+.c-igw { border-color:#d29922; background:#1c2128; }
+.c-igw h2 { color:#d29922; }
+
+.c-vpc { border-color:#2d5a8e; background:#0a1525; padding:14px; }
+.c-vpc > h2 { color:#58a6ff; font-size:0.95rem; margin-bottom:10px; }
+
+.c-pub { border-color:#3fb950; background:#0d1f14; }
+.c-pub h2 { color:#3fb950; }
+.c-pub .tag { background:#0d2a18; color:#3fb950; border:1px solid #3fb950; }
+
+.c-priv { border-color:#58a6ff; background:#0d1a2e; }
+.c-priv h2 { color:#58a6ff; }
+.c-priv .tag { background:#0d1f3a; color:#58a6ff; border:1px solid #58a6ff; }
+
+.c-mon { border-color:#bc8cff; background:#1a1030; }
+.c-mon h2 { color:#bc8cff; }
+
+.c-eks { border-color:#d29922; background:#1c1a10; }
+.c-eks h2 { color:#d29922; }
+
+.c-iam { border-color:#d29922; background:#1c1a10; }
+.c-iam h2 { color:#d29922; }
+
+.c-sg  { border-color:#f85149; background:#1c1010; }
+.c-sg  h2 { color:#f85149; }
+
+.c-cw  { border-color:#00bcd4; background:#0d1f24; }
+.c-cw  h2 { color:#00bcd4; }
+.c-cw  .tag { background:#0a2a30; color:#00bcd4; border:1px solid #00bcd4; font-size:0.65rem; }
+
+.c-s3  { border-color:#d29922; background:#1c1a10; }
+.c-s3  h2 { color:#d29922; }
+.c-s3  .tag { background:#2a1a08; color:#d29922; border:1px solid #d29922; }
+
+/* arrow */
+.arr { text-align:center; color:#30363d; font-size:1.3rem; line-height:1.1; margin:0 6px; }
+
+/* node row */
+.nodes { display:flex; gap:8px; margin-top:8px; }
+.node  { flex:1; border-radius:8px; padding:8px; text-align:center; border:1px solid #58a6ff; background:#0d1a2e; }
+.node .nlabel { font-size:0.75rem; font-weight:700; color:#58a6ff; }
+.node .nsub   { font-size:0.65rem; color:#8b949e; margin-top:2px; }
+
+/* monitoring tools */
+.mon-tools { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+.mt { flex:1; min-width:80px; border-radius:8px; padding:8px 6px; text-align:center; border:1.5px solid; }
+.mt .mn { font-size:0.78rem; font-weight:700; }
+.mt .md { font-size:0.65rem; color:#8b949e; margin-top:2px; }
+
+/* stats */
+.stats { display:flex; gap:6px; margin-top:8px; }
+.stat  { flex:1; background:#161b22; border-radius:6px; padding:5px 8px; text-align:center; }
+.stat .sv { font-size:1rem; font-weight:700; }
+.stat .sl { font-size:0.62rem; color:#8b949e; }
+
+/* side connector line */
+.side-connector {
+  display:flex; align-items:center; justify-content:center;
+  color:#00bcd4; font-size:0.7rem; writing-mode:vertical-rl;
+  height:60px; margin:0 auto;
+}
+
+/* CW log group boxes */
+.lg { background:#0a2a30; border:1px solid #00bcd4; border-radius:6px; padding:5px 8px; margin-top:6px; font-family:monospace; font-size:0.65rem; color:#00bcd4; }
+
+/* legend */
+.legend { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:16px; }
+.li { display:flex; align-items:center; gap:5px; font-size:0.72rem; color:#8b949e; }
+.ld { width:10px; height:10px; border-radius:50%; }
+
+/* SVG icons inline */
+svg.icon { vertical-align:middle; margin-right:5px; }
+</style>
+</head>
+<body>
+
+<h1>
+  <svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#58a6ff" stroke-width="1.5"/><path d="M8 12h8M12 8v8" stroke="#58a6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+  AWS EKS Cluster — Architecture
+</h1>
+<p class="sub">Region: us-east-1 &nbsp;|&nbsp; Cluster: my-eks-cluster &nbsp;|&nbsp; Terraform-managed &nbsp;|&nbsp; Kubernetes 1.31</p>
+
+<div class="layout">
+
+  <!-- ══ MAIN COLUMN ══ -->
+  <div class="main">
+
+    <!-- Internet -->
+    <div class="card c-internet" style="text-align:center;">
+      <h2 style="justify-content:center;">
+        <!-- globe -->
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#e6edf3" stroke-width="1.5"/><ellipse cx="12" cy="12" rx="4" ry="9" stroke="#e6edf3" stroke-width="1.5"/><line x1="3" y1="12" x2="21" y2="12" stroke="#e6edf3" stroke-width="1.5"/></svg>
+        Internet
+      </h2>
+      <p>Public traffic entry point</p>
+    </div>
+
+    <div class="arr">↓</div>
+
+    <!-- WAF -->
+    <div class="card c-waf">
+      <h2>
+        <!-- shield -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3L4 7v5c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V7L12 3z" stroke="#e040fb" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#e040fb" stroke-width="1.5" stroke-linecap="round"/></svg>
+        AWS WAFv2 — Web ACL (Regional)
+      </h2>
+      <span class="tag">AWSManagedRulesCommonRuleSet</span>
+      <span class="tag">AWSManagedRulesKnownBadInputsRuleSet</span>
+      <span class="tag">Rate Limit: 2,000 req / 5 min</span>
+      <p style="margin-top:6px;">Attached to Grafana ALB. Blocks exploits before reaching the cluster.</p>
+    </div>
+
+    <div class="arr">↓</div>
+
+    <!-- IGW -->
+    <div class="card c-igw" style="text-align:center;">
+      <h2 style="justify-content:center;">
+        <!-- gateway/router icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="18" height="8" rx="2" stroke="#d29922" stroke-width="1.5"/><circle cx="7" cy="12" r="1.2" fill="#d29922"/><circle cx="12" cy="12" r="1.2" fill="#d29922"/><circle cx="17" cy="12" r="1.2" fill="#d29922"/><line x1="12" y1="3" x2="12" y2="8" stroke="#d29922" stroke-width="1.5"/><line x1="12" y1="16" x2="12" y2="21" stroke="#d29922" stroke-width="1.5"/></svg>
+        Internet Gateway
+      </h2>
+      <p>Routes traffic between VPC and internet</p>
+    </div>
+
+    <div class="arr">↓</div>
+
+    <!-- VPC -->
+    <div class="card c-vpc">
+      <h2>
+        <!-- cloud/vpc icon -->
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 19a4 4 0 01-.5-7.9A5.5 5.5 0 0117 11a3.5 3.5 0 01-.5 7H6z" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        VPC — 10.1.0.0/16
+      </h2>
+
+      <!-- Public Subnets -->
+      <div class="card c-pub">
+        <h2>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#3fb950" stroke-width="1.5"/><path d="M12 7v5l3 3" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Public Subnets (AZ1–AZ3)
+        </h2>
+        <span class="tag">10.1.1.0/24</span><span class="tag">10.1.2.0/24</span><span class="tag">10.1.3.0/24</span>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <div class="card c-pub" style="flex:1; margin:0;">
+            <h2 style="font-size:0.78rem;">
+              <!-- NAT icon -->
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12h16M16 8l4 4-4 4" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              NAT Gateway
+            </h2>
+            <p>+ Elastic IP<br>Outbound for private nodes</p>
+          </div>
+          <div class="card c-pub" style="flex:1; margin:0;">
+            <h2 style="font-size:0.78rem;">
+              <!-- LB icon -->
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="4" rx="1" stroke="#3fb950" stroke-width="1.5"/><line x1="12" y1="9" x2="12" y2="13" stroke="#3fb950" stroke-width="1.5"/><line x1="7" y1="13" x2="17" y2="13" stroke="#3fb950" stroke-width="1.5"/><circle cx="7" cy="16" r="2" stroke="#3fb950" stroke-width="1.5"/><circle cx="17" cy="16" r="2" stroke="#3fb950" stroke-width="1.5"/></svg>
+              AWS Load Balancer
+            </h2>
+            <p>Exposes Grafana<br><code style="color:#3fb950;font-size:0.68rem;">k8s.io/role/elb=1</code></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="arr">↓</div>
+
+      <!-- Private Subnets -->
+      <div class="card c-priv">
+        <h2>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="10" rx="2" stroke="#58a6ff" stroke-width="1.5"/><path d="M8 11V7a4 4 0 018 0v4" stroke="#58a6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Private Subnets (AZ1–AZ3)
+        </h2>
+        <span class="tag">10.1.11.0/24</span><span class="tag">10.1.12.0/24</span><span class="tag">10.1.13.0/24</span>
+
+        <div class="nodes">
+          <div class="node">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="#58a6ff" stroke-width="1.5"/><line x1="2" y1="9" x2="22" y2="9" stroke="#58a6ff" stroke-width="1"/><circle cx="5.5" cy="6.5" r="1" fill="#58a6ff"/><circle cx="8.5" cy="6.5" r="1" fill="#58a6ff"/></svg>
+            <div class="nlabel">Worker Node AZ1</div><div class="nsub">t3.medium</div>
+          </div>
+          <div class="node">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="#58a6ff" stroke-width="1.5"/><line x1="2" y1="9" x2="22" y2="9" stroke="#58a6ff" stroke-width="1"/><circle cx="5.5" cy="6.5" r="1" fill="#58a6ff"/><circle cx="8.5" cy="6.5" r="1" fill="#58a6ff"/></svg>
+            <div class="nlabel">Worker Node AZ2</div><div class="nsub">t3.medium</div>
+          </div>
+          <div class="node">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="#58a6ff" stroke-width="1.5"/><line x1="2" y1="9" x2="22" y2="9" stroke="#58a6ff" stroke-width="1"/><circle cx="5.5" cy="6.5" r="1" fill="#58a6ff"/><circle cx="8.5" cy="6.5" r="1" fill="#58a6ff"/></svg>
+            <div class="nlabel">Worker Node AZ3</div><div class="nsub">t3.medium</div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><div class="sv" style="color:#58a6ff;">2</div><div class="sl">Desired</div></div>
+          <div class="stat"><div class="sv" style="color:#3fb950;">2</div><div class="sl">Min</div></div>
+          <div class="stat"><div class="sv" style="color:#d29922;">4</div><div class="sl">Max</div></div>
+          <div class="stat"><div class="sv" style="color:#bc8cff; font-size:0.75rem;">Managed</div><div class="sl">Node Group</div></div>
+        </div>
+
+        <!-- Monitoring Namespace -->
+        <div class="card c-mon" style="margin-top:10px;">
+          <h2>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke="#bc8cff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Namespace: monitoring
+          </h2>
+          <div class="mon-tools">
+            <div class="mt" style="border-color:#e6522c;background:#1c0a08;"><div class="mn" style="color:#e6522c;">📈 Prometheus</div><div class="md">20Gi PVC</div></div>
+            <div class="mt" style="border-color:#e6522c;background:#1c0a08;"><div class="mn" style="color:#e6522c;">🔔 Alertmanager</div><div class="md">5Gi PVC</div></div>
+            <div class="mt" style="border-color:#F46800;background:#1c1008;"><div class="mn" style="color:#F46800;">📊 Grafana</div><div class="md">10Gi PVC</div></div>
+            <div class="mt" style="border-color:#F0A830;background:#1c1808;"><div class="mn" style="color:#F0A830;">🪵 Loki</div><div class="md">20Gi PVC</div></div>
+            <div class="mt" style="border-color:#00bfb3;background:#081c1c;"><div class="mn" style="color:#00bfb3;">🚀 Promtail</div><div class="md">DaemonSet</div></div>
+          </div>
+          <p style="margin-top:6px; font-size:0.72rem;">Promtail → Loki (logs) &nbsp;|&nbsp; Prometheus → Grafana (metrics) &nbsp;|&nbsp; Deployed via Helm</p>
+        </div>
+      </div>
+
+      <div class="arr">↓</div>
+
+      <!-- EKS Control Plane -->
+      <div class="card c-eks">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#d29922" stroke-width="1.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M16.9 16.9l2.1 2.1M4.9 19.1l2.1-2.1M16.9 7.1l2.1-2.1" stroke="#d29922" stroke-width="1.5" stroke-linecap="round"/></svg>
+          EKS Control Plane — AWS Managed &nbsp;|&nbsp; k8s 1.31
+        </h2>
+        <p style="margin-bottom:8px;">Logs → CloudWatch: <code style="color:#00bcd4; font-size:0.72rem;">api · audit · authenticator · controllerManager · scheduler</code></p>
+        <div style="display:flex; gap:8px;">
+          <div class="card c-iam" style="flex:1; margin:0;">
+            <h2 style="font-size:0.78rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#d29922" stroke-width="1.5"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#d29922" stroke-width="1.5" stroke-linecap="round"/></svg>
+              eks-cluster-role
+            </h2>
+            <p>AmazonEKSClusterPolicy</p>
+          </div>
+          <div class="card c-iam" style="flex:1; margin:0;">
+            <h2 style="font-size:0.78rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#d29922" stroke-width="1.5"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#d29922" stroke-width="1.5" stroke-linecap="round"/></svg>
+              nodegroup-role
+            </h2>
+            <p>EKSWorkerNode + CNI + ECR</p>
+          </div>
+          <div class="card c-sg" style="flex:1; margin:0;">
+            <h2 style="font-size:0.78rem;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#f85149" stroke-width="1.5"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="#f85149" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Security Groups
+            </h2>
+            <p>cluster-sg &nbsp;|&nbsp; nodes-sg</p>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /vpc -->
+
+    <!-- S3 -->
+    <div class="card c-s3">
+      <h2>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="8" ry="3" stroke="#d29922" stroke-width="1.5"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" stroke="#d29922" stroke-width="1.5"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="#d29922" stroke-width="1.5"/></svg>
+        S3 — Terraform Remote State
+      </h2>
+      <span class="tag">Versioning: Enabled</span>
+      <span class="tag">Encryption: AES-256</span>
+      <span class="tag">Public Access: Blocked</span>
+      <span class="tag">force_destroy: false</span>
+      <p style="margin-top:6px;">Bootstrapped by <code style="font-size:0.72rem;">backend/</code> module before main apply.</p>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ══ SIDE COLUMN — CloudWatch ══ -->
+  <div class="side">
+
+    <!-- spacer to align CW with EKS control plane area -->
+    <div style="height: 520px;"></div>
+
+    <!-- dashed connector line -->
+    <div style="text-align:center; color:#00bcd4; font-size:0.68rem; margin-bottom:4px;">
+      <svg width="2" height="60" style="display:block; margin:0 auto;"><line x1="1" y1="0" x2="1" y2="60" stroke="#00bcd4" stroke-width="1.5" stroke-dasharray="4,3"/></svg>
+      EKS logs
+    </div>
+
+    <div class="card c-cw" style="margin:0 6px;">
+      <h2>
+        <!-- CloudWatch / chart icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#00bcd4" stroke-width="1.5"/><polyline points="7 14 10 10 13 13 17 8" stroke="#00bcd4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        CloudWatch Logs
+      </h2>
+      <p style="margin-bottom:8px; font-size:0.72rem;">Receives all EKS control plane log types</p>
+
+      <div class="lg">/aws/eks/<br>my-eks-cluster<br>/cluster</div>
+      <div class="lg">/aws/eks/<br>my-eks-cluster<br>/application</div>
+
+      <p style="margin-top:8px; font-size:0.7rem; color:#00bcd4;">⏱ Retention: 30 days</p>
+
+      <div style="margin-top:10px; border-top:1px solid #0a2a30; padding-top:8px;">
+        <p style="font-size:0.7rem; color:#8b949e; margin-bottom:4px;">Log types:</p>
+        <span class="tag">api</span>
+        <span class="tag">audit</span>
+        <span class="tag">authenticator</span>
+        <span class="tag">controllerManager</span>
+        <span class="tag">scheduler</span>
+      </div>
+    </div>
+
+    <!-- connector down to S3 -->
+    <div style="text-align:center; margin-top:8px;">
+      <svg width="2" height="40" style="display:block; margin:0 auto;"><line x1="1" y1="0" x2="1" y2="40" stroke="#30363d" stroke-width="1.5" stroke-dasharray="4,3"/></svg>
+    </div>
+
+    <!-- Terraform state note -->
+    <div class="card" style="border-color:#30363d; background:#161b22; margin:0 6px; font-size:0.72rem; color:#8b949e; text-align:center;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="display:block;margin:0 auto 4px;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="#8b949e" stroke-width="1.5"/><polyline points="14 2 14 8 20 8" stroke="#8b949e" stroke-width="1.5"/></svg>
+      Terraform state stored in S3 backend
+    </div>
+
+  </div><!-- /side -->
+
+</div><!-- /layout -->
+
+<!-- Legend -->
+<div class="legend">
+  <div class="li"><div class="ld" style="background:#e040fb;"></div> WAF</div>
+  <div class="li"><div class="ld" style="background:#d29922;"></div> IGW / EKS / IAM / S3</div>
+  <div class="li"><div class="ld" style="background:#3fb950;"></div> Public Subnets</div>
+  <div class="li"><div class="ld" style="background:#58a6ff;"></div> Private Subnets / Nodes</div>
+  <div class="li"><div class="ld" style="background:#bc8cff;"></div> Monitoring Namespace</div>
+  <div class="li"><div class="ld" style="background:#00bcd4;"></div> CloudWatch Logs</div>
+  <div class="li"><div class="ld" style="background:#f85149;"></div> Security Groups</div>
+</div>
+
+</body>
+</html>

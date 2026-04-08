@@ -22,13 +22,15 @@ module "iam" {
 module "cloudwatch" {
   source       = "./modules/cloudwatch"
   cluster_name = var.cluster_name
+  vpc_id       = module.networking.vpc_id
   tags         = var.tags
 }
 
 module "waf" {
-  source = "./modules/waf"
-  name   = var.cluster_name
-  tags   = var.tags
+  source            = "./modules/waf"
+  name              = var.cluster_name
+  waf_log_group_arn = module.cloudwatch.waf_log_group_arn
+  tags              = var.tags
 }
 
 module "eks" {

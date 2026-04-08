@@ -58,20 +58,24 @@ label(ax, 10, 24.47, 'Internet Gateway', size=10, color=C_ORANGE, weight='bold')
 arrow(ax, 10, 24.1, 10, 23.4)
 
 # ── CLOUDWATCH (right side) ───────────────────────────────────────────────────
-box(ax, 15.5, 22.5, 4.1, 4.5, '#0d1f24', lw=2, edgecolor=C_CW)
+box(ax, 15.5, 19.5, 4.1, 7.5, '#0d1f24', lw=2, edgecolor=C_CW)
 label(ax, 17.55, 26.7, 'CloudWatch', size=10, color=C_CW, weight='bold')
 label(ax, 17.55, 26.3, 'Logs', size=9, color=C_CW)
 
-box(ax, 15.7, 24.8, 3.7, 0.9, '#0a2a30', lw=1, edgecolor=C_CW)
-label(ax, 17.55, 25.25, '/aws/eks/.../cluster', size=7.5, color=C_CW)
+box(ax, 15.7, 25.1, 3.7, 0.85, '#0a2a30', lw=1, edgecolor=C_CW)
+label(ax, 17.55, 25.52, '/aws/eks/.../cluster', size=7.5, color=C_CW)
 
-box(ax, 15.7, 23.7, 3.7, 0.9, '#0a2a30', lw=1, edgecolor=C_CW)
-label(ax, 17.55, 24.15, '/aws/eks/.../application', size=7.5, color=C_CW)
+box(ax, 15.7, 24.0, 3.7, 0.85, '#0a2a30', lw=1, edgecolor=C_CW)
+label(ax, 17.55, 24.42, '/aws/eks/.../application', size=7.5, color=C_CW)
 
-label(ax, 17.55, 23.4, 'Retention: 30 days', size=7, color=C_MUTED)
+box(ax, 15.7, 22.9, 3.7, 0.85, '#0a2a30', lw=1, edgecolor=C_WAF)
+label(ax, 17.55, 23.32, 'aws-waf-logs-...', size=7.5, color=C_WAF)
 
-# EKS → CloudWatch arrow (drawn later after EKS box, using a side arrow)
-# placeholder — drawn after VPC box
+box(ax, 15.7, 21.8, 3.7, 0.85, '#0a2a30', lw=1, edgecolor=C_BLUE)
+label(ax, 17.55, 22.22, '/aws/vpc/.../flow-logs', size=7.5, color=C_BLUE)
+
+label(ax, 17.55, 21.4, 'Retention: 30 days', size=7, color=C_MUTED)
+label(ax, 17.55, 21.1, '← EKS  ← WAF  ← VPC', size=6.5, color=C_MUTED)
 
 # ── VPC ───────────────────────────────────────────────────────────────────────
 box(ax, 0.4, 1.2, 14.8, 22.0, '#1a3a5c', alpha=0.35, lw=2, edgecolor='#2d5a8e')
@@ -104,13 +108,15 @@ box(ax, 0.7, 9.5, 14.1, 11.2, '#1a2a4a', alpha=0.4, lw=1.5, edgecolor=C_BLUE)
 label(ax, 1.8, 20.5, 'Private Subnets  AZ1: 10.1.11.0/24  |  AZ2: 10.1.12.0/24', size=8, color=C_BLUE, ha='left')
 
 for nx, az in [(1.0, 'AZ1'), (8.0, 'AZ2')]:
-    box(ax, nx, 17.8, 6.5, 2.2, '#1c2a3a', lw=1.5, edgecolor=C_BLUE)
-    label(ax, nx+3.25, 19.1, f'Worker Node ({az})  t3.medium', size=9, color=C_BLUE, weight='bold')
-    label(ax, nx+3.25, 18.7, 'EKS Managed Node Group', size=8, color=C_MUTED)
-    label(ax, nx+3.25, 18.3, '0.0.0.0/0 → NAT Gateway', size=8, color=C_MUTED)
+    box(ax, nx, 17.8, 6.5, 2.5, '#1c2a3a', lw=1.5, edgecolor=C_BLUE)
+    label(ax, nx+3.25, 19.4, f'Worker Node ({az})  t3.medium', size=9, color=C_BLUE, weight='bold')
+    label(ax, nx+3.25, 18.95, 'EKS Managed Node Group', size=8, color=C_MUTED)
+    label(ax, nx+3.25, 18.55, 'Private Subnet  |  0.0.0.0/0 → NAT', size=7.5, color=C_MUTED)
+    label(ax, nx+3.25, 18.15, '2 vCPU  4 GB RAM', size=7.5, color=C_MUTED)
 
+# Third node AZ3
 box(ax, 5.5, 17.2, 4.0, 0.55, '#1a2a3a', lw=1, edgecolor=C_BLUE)
-label(ax, 7.5, 17.47, 'desired=2  min=2  max=4', size=8, color=C_MUTED)
+label(ax, 7.5, 17.47, 'desired=2  min=2  max=4  |  AZ3: 10.1.13.0/24', size=8, color=C_MUTED)
 
 # ── MONITORING NAMESPACE ──────────────────────────────────────────────────────
 box(ax, 0.9, 10.0, 13.5, 6.9, '#2a1a4a', alpha=0.5, lw=1.5, edgecolor=C_PURPLE)
@@ -155,7 +161,13 @@ label(ax, 12.35, 7.2, 'Security Groups', size=8, color=C_RED)
 label(ax, 12.35, 6.8, 'cluster-sg  |  nodes-sg', size=7, color=C_MUTED)
 
 # EKS → CloudWatch arrow
-arrow(ax, 14.8, 7.6, 15.5, 24.0, color=C_CW, lw=1.2, dashed=True)
+arrow(ax, 14.8, 7.6, 15.5, 22.0, color=C_CW, lw=1.2, dashed=True)
+
+# WAF → CloudWatch (full logs)
+arrow(ax, 15.5, 25.6, 15.5, 23.75, color=C_WAF, lw=1.2, dashed=True)
+
+# VPC Flow Logs → CloudWatch
+arrow(ax, 14.8, 20.0, 15.5, 22.22, color=C_BLUE, lw=1.2, dashed=True)
 
 # ── S3 BACKEND ───────────────────────────────────────────────────────────────
 box(ax, 0.7, 1.4, 14.1, 4.3, '#3a2a1a', alpha=0.5, lw=1.5, edgecolor=C_ORANGE)
